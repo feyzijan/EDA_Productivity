@@ -8,3 +8,7 @@ log_data_windows_a4.pkl
 empatica_data_a3.pkl
 empatica_data_a4.pkl
 ~$*.xlsx
+code_snapshots_a3
+code_snapshots_a4
+a3_files_to_copy
+a4_files_to_copy

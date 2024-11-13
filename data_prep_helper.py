@@ -6,6 +6,9 @@ import json
 import pickle
 import os
 import sys
+import datetime
+import os
+import copy
 
 from scipy.stats import linregress
 from scipy.fft import fft
@@ -45,6 +48,11 @@ a4_path = f"{local_directory_path}/A4_DataFiles"
 
 p_list_a3 = [x for x in all_a3_participants if x not in a3_participants_to_remove]
 p_list_a4 = [x for x in all_a4_participants if x not in a4_participants_to_remove]
+
+a3_participants_to_remove_keylogs = ['P15', 'P25', 'P26', 'P34_2', 'P46'] + ['P3_1','P3_2','P8_1','P8_2','P9_1','P9_2','P34_1','P43_1','P43_2']
+a4_participants_to_remove_keylogs = ['P12', 'P26', 'P46'] + ["P34_1", "P34_2"]
+p_list_a3_log_analysis =[x for x in p_list_a3 if x not in a3_participants_to_remove_keylogs]
+p_list_a4_log_analysis =[x for x in p_list_a4 if x not in a4_participants_to_remove_keylogs]
 
 
 
