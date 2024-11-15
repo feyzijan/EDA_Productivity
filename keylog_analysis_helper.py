@@ -1,10 +1,12 @@
 
 from data_prep_helper import *
 import os
-import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 import shutil
+import subprocess
+import pandas as pd
+import re
 
 snapshots_dir_a3 = 'code_snapshots_a3'
 snapshots_dir_a4 = 'code_snapshots_a4'
@@ -18,17 +20,17 @@ def get_keylog_dfs():
     _, keylog_data_a4 = clip_for_start_end_times(empatica_data_a4, keylog_data_a4, a3=False)
 
     # start times from 0
-    for df in keylog_data_a3.values():
+    for key,df in keylog_data_a3.items():
         df["T_s"] = df["T_s"] - df["T_s"].min()
         df['Time'] = pd.to_datetime(df['Time'])
         df = df.sort_values('Time').reset_index(drop=True)
-        df['change_length'] = df['range_length'] + 1
+        df = df.drop(columns=['Time_s'])
 
-    for df in keylog_data_a4.values():
+    for key,df in keylog_data_a4.items():
         df["T_s"] = df["T_s"] - df["T_s"].min()
         df['Time'] = pd.to_datetime(df['Time'])
         df = df.sort_values('Time').reset_index(drop=True)
-        df['change_length'] = df['range_length'] + 1
+        df = df.drop(columns=['Time_s'])
 
 
     # Remove participants without start data
@@ -266,12 +268,7 @@ def move_file_if_exists(file_path, dest_dir):
         print(f"Warning: '{file_path}' does not exist and cannot be moved.")
 
 
-import os
-import subprocess
-import pandas as pd
-import re
-
-def run_autograder(a3=True):
+def run_local_autograder(a3=True):
 
     # Set assignment parameters
     if a3:
@@ -353,7 +350,7 @@ def run_autograder(a3=True):
     df.sort_values(by=['participant', 'snapshot'], inplace=True)
     df.reset_index(drop=True, inplace=True)
 
-    df['autograder_error_numeric'] = df['autograder_error'].astype(int)
+    df['autograder_error'] = df['autograder_error'].astype(int)
 
     return df
 
@@ -371,6 +368,8 @@ def plot_keylogger_results(df, a3=True):
 
         file_1_length = 'bustersAgents.py_length' if a3 else 'NeuralNet.py_length'
         file_2_length = 'inference.py_length' if a3 else 'NeuralNetUtil.py_length'
+
+        print(file_1_length, file_2_length)
         
         # Plot the lengths
         sns.lineplot(

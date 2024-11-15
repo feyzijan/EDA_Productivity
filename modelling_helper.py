@@ -58,17 +58,17 @@ def split_data(X, y):
     return train_test_split(X, y, test_size=0.2, random_state=42)
 
 def read_combined_dataset():
-    X, X_pca, X_pruned, y = load_data("ModelDatasets/a3_a4_combined")
+    X, X_pca, X_pruned, y = load_data("EDAModelDatasets/a3_a4_combined")
     return split_data(X, y), split_data(X_pca, y)
     # , split_data(X_pruned, y)
 
 def read_a3_dataset():
-    X_a3, X_a3_pca, X_a3_pruned, y_a3 = load_data("ModelDatasets/a3")
+    X_a3, X_a3_pca, X_a3_pruned, y_a3 = load_data("EDAModelDatasets/a3")
     return split_data(X_a3, y_a3), split_data(X_a3_pca, y_a3)
 # , split_data(X_a3_pruned, y_a3)
 
 def read_a4_dataset():
-    X_a4, X_a4_pca, X_a4_pruned, y_a4 = load_data("ModelDatasets/a4")
+    X_a4, X_a4_pca, X_a4_pruned, y_a4 = load_data("EDAModelDatasets/a4")
     return split_data(X_a4, y_a4), split_data(X_a4_pca, y_a4)
     # split_data(X_a4_pruned, y_a4)
 
@@ -83,7 +83,7 @@ def load_each_subject_individually_modelling():
     p_list_a3_use = list(set(p_list_a3_use))
 
     for p in p_list_a3_use:
-        folder_path = f"ModelDatasets/{p}/a3"
+        folder_path = f"EDAModelDatasets/{p}/a3"
         X = pd.read_csv(f"{folder_path}/x.csv") 
         y = pd.read_csv(f"{folder_path}/y.csv").to_numpy()
         X_list.append(X)
@@ -95,7 +95,7 @@ def load_each_subject_individually_modelling():
     p_list_a4_use = [p.split("_")[0] for p in p_list_a4]
     p_list_a4_use = list(set(p_list_a4_use))
     for p in p_list_a4_use:
-        folder_path = f"ModelDatasets/{p}/a4"
+        folder_path = f"EDAModelDatasets/{p}/a4"
         X = pd.read_csv(f"{folder_path}/x.csv") 
         y = pd.read_csv(f"{folder_path}/y.csv").to_numpy()
 
