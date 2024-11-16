@@ -67,7 +67,7 @@ def load_each_subject_individually():
     X_list = []
     y_list = []
 
-    for p in p_list_a3:
+    for p in p_list_a3_eda:
         p = p.split("_")[0]
         folder_path = f"EDAModelDatasets/{p}/a3"
         X = pd.read_csv(f"{folder_path}/x.csv")    
@@ -75,7 +75,7 @@ def load_each_subject_individually():
         X_list.append(X)
         y_list.append(y)
 
-    for p in p_list_a4:
+    for p in p_list_a4_eda:
         p = p.split("_")[0]
         folder_path = f"EDAModelDatasets/{p}/a4"
         X = pd.read_csv(f"{folder_path}/x.csv")    

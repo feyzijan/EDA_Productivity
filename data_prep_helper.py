@@ -32,29 +32,28 @@ bvp_freq = 64
 data_types = ["EDA", "HR", "ACC", "TEMP", "BVP", "tags"]
 
 # Path variables and participant list
-all_a3_participants = ['P3_1','P3_2','P5','P8_1','P8_2','P9_1','P9_2', 'P11','P12','P13','P15','P16','P19','P20', 'P21','P24','P25',
-           'P26','P28','P29','P30','P34_1','P34_2','P40','P42', 'P43_1','P43_2','P46','P47']
+all_a3_participants = ['P3','P3_2','P5','P8','P8_2','P9','P9_2', 'P11','P12','P13','P15','P16','P19','P20', 'P21','P24','P25',
+           'P26','P28','P29','P30','P34','P34_2','P40','P42', 'P43','P43_2','P46','P47']
 
 all_a4_participants = ["P9", "P11", "P12", "P15","P16", "P19", "P20", "P26", "P29", "P30",
-             "P34_1", "P34_2", "P36", "P42", "P43", "P46","P50", "P52", "P53"]
+             "P34", "P34_2", "P36", "P42", "P43", "P46","P50", "P52", "P53"]
 
 # Exclude participants with poor data (seemingly incorrectly warn watch, very flat response etc)
-a3_participants_to_remove = ['P16', 'P40', 'P50']
-a4_participants_to_remove = []
+a3_participants_to_remove_eda = ['P16', 'P36', 'P37','P40', 'P50']
+a4_participants_to_remove_eda = ['P3', 'P8', 'P22']
 
 local_directory_path = "/Users/feyzjan/Library/CloudStorage/OneDrive-GeorgiaInstituteofTechnology/GatechCourses/CS 8903 Research"
 a3_path = f"{local_directory_path}/A3_DataFiles"
 a4_path = f"{local_directory_path}/A4_DataFiles"
 
-p_list_a3 = [x for x in all_a3_participants if x not in a3_participants_to_remove]
-p_list_a4 = [x for x in all_a4_participants if x not in a4_participants_to_remove]
-
-a3_participants_to_remove_keylogs = ['P15', 'P25', 'P26', 'P34_2', 'P46'] + ['P3_1','P3_2','P8_1','P8_2','P9_1','P9_2','P34_1','P43_1','P43_2']
-a4_participants_to_remove_keylogs = ['P12', 'P26', 'P46'] + ["P34_1", "P34_2"]
-p_list_a3_log_analysis =[x for x in p_list_a3 if x not in a3_participants_to_remove_keylogs]
-p_list_a4_log_analysis =[x for x in p_list_a4 if x not in a4_participants_to_remove_keylogs]
+p_list_a3_eda = [x for x in all_a3_participants if x not in a3_participants_to_remove_eda]
+p_list_a4_eda = [x for x in all_a4_participants if x not in a4_participants_to_remove_eda]
 
 
+a3_participants_to_remove_keylogs = ['P15', 'P25', 'P26', 'P34_2', 'P46'] + ['P3_2','P8_2','P9_2','P43_2']
+a4_participants_to_remove_keylogs = ['P12', 'P26', 'P46'] + ["P34_2"]
+p_list_a3_log_analysis =[x for x in p_list_a3_eda if x not in a3_participants_to_remove_keylogs]
+p_list_a4_log_analysis =[x for x in p_list_a4_eda if x not in a4_participants_to_remove_keylogs]
 
 """
 Read in the EDA data from folders named in the p_list, and return a dictionary with the dataframes
@@ -62,12 +61,12 @@ Read in the EDA data from folders named in the p_list, and return a dictionary w
 Returns:
     dict: key1: participant ID[eg. 'P10']  key2: DataType (eg.EDA) value: DataFrame
 """
-def get_empatica_data(a3) -> dict:
+def get_empatica_data(a3,keylogger=False) -> dict:
     if a3 == True:
-        p_list = p_list_a3
+        p_list = p_list_a3_eda if keylogger == False else p_list_a3_log_analysis
         path = a3_path
     else:
-        p_list = p_list_a4
+        p_list = p_list_a4_eda if keylogger == False else p_list_a4_log_analysis
         path = a4_path
     data = {}
 
@@ -105,14 +104,14 @@ def get_empatica_data(a3) -> dict:
 
 
 '''
-
 '''
-def get_keylog_data(a3):
+
+def get_keylog_data(a3, keylogger=False) -> dict:
     if a3 == True:
-        p_list = p_list_a3
+        p_list = p_list_a3_eda if keylogger == False else p_list_a3_log_analysis
         path = a3_path
     else:
-        p_list = p_list_a4
+        p_list = p_list_a4_eda if keylogger == False else p_list_a4_log_analysis
         path = a4_path
 
     data_dict = {}
@@ -167,11 +166,11 @@ End:
 
 
 '''
-def clip_for_start_end_times(empatica_data, keylog_data, a3):
+def clip_for_start_end_times(empatica_data, keylog_data, a3, keylogger=False):
     if a3 == True:
-        p_list = p_list_a3
+        p_list = p_list_a3_eda if keylogger == False else p_list_a3_log_analysis
     else:
-        p_list = p_list_a4
+        p_list = p_list_a4_eda if keylogger == False else p_list_a4_log_analysis
 
     # Get the start and end time of the EDA data, clip the log data to match that 
     for p in p_list:
@@ -244,9 +243,9 @@ def clip_for_start_end_times(empatica_data, keylog_data, a3):
 
 def print_start_end_times(empatica_data, keylog_data, a3):
     if a3 == True:
-        p_list = p_list_a3
+        p_list = p_list_a3_eda
     else:
-        p_list = p_list_a4
+        p_list = p_list_a4_eda
 
     for p in p_list:
         print(p)
@@ -260,9 +259,9 @@ Upsample eda signal
 '''
 def upsample_eda_signal(empatica_data, a3, eda_freq, upsampled_freq):
     if a3 == True:
-        p_list = p_list_a3
+        p_list = p_list_a3_eda
     else:
-        p_list = p_list_a4
+        p_list = p_list_a4_eda
 
     for p in p_list:
         eda = np.array(nk.signal_resample(empatica_data[p]["EDA"]["EDA"], sampling_rate=eda_freq, desired_sampling_rate=upsampled_freq, method="linear"))
@@ -283,9 +282,9 @@ def upsample_eda_signal(empatica_data, a3, eda_freq, upsampled_freq):
 
 def apply_butterforth_filter(empatica_data, a3):
     if a3 == True:
-        p_list = p_list_a3
+        p_list = p_list_a3_eda
     else:
-        p_list = p_list_a4
+        p_list = p_list_a4_eda
     for p in p_list:
         eda = empatica_data[p]["EDA"]["EDA"]
         empatica_data[p]["EDA"]["EDA"] = nk.bio_process(edadata=eda, sampling_rate=upsampled_freq, method="butterworth", cutoff=butterpass_cutoff, order=butterpass_order)
@@ -293,9 +292,9 @@ def apply_butterforth_filter(empatica_data, a3):
 
 def process_eda_signal(empatica_data, a3):
     if a3 == True:
-        p_list = p_list_a3
+        p_list = p_list_a3_eda
     else:
-        p_list = p_list_a4
+        p_list = p_list_a4_eda
     for p in p_list:
         signals, info = nk.eda_process(empatica_data[p]['EDA']['EDA'], sampling_rate=eda_freq)
         date_time = empatica_data[p_list[0]]["EDA"]["Time"]
@@ -319,9 +318,9 @@ def artifact_analysis():
 
 def create_windowed_data(empatica_data, keylog_data, a3):
     if a3 == True:
-        p_list = p_list_a3
+        p_list = p_list_a3_eda
     else:
-        p_list = p_list_a4
+        p_list = p_list_a4_eda
     for p in p_list:
         # generate divider times
         start_time = min(empatica_data[p]["EDA"]['Time_s'].min(), keylog_data[p]['Time_s'].min())
@@ -350,9 +349,9 @@ peak amplitude, and 𝑣𝑖) average scr rise time.
 '''
 def create_aggregated_eda_window_features(empatica_data, a3):
     if a3 == True:
-        p_list = p_list_a3
+        p_list = p_list_a3_eda
     else:
-        p_list = p_list_a4
+        p_list = p_list_a4_eda
 
     for p in p_list:
 
@@ -382,9 +381,9 @@ Here we compute a lot of potentially useful features for each 4s window of EDA d
 '''
 def create_extra_aggregated_eda_window_features(empatica_data, a3):
     if a3 == True:
-        p_list = p_list_a3
+        p_list = p_list_a3_eda
     else:
-        p_list = p_list_a4
+        p_list = p_list_a4_eda
 
     feature_names = ["min_feat","max_feat","mean_feat","std_feat","dynamic_range_feat","slope_feat","absolute_slope_feat","first_derivetive_mean_feat",
                   "first_derivative_std_feat","dc_term","sum_of_all_coefficients","information_entropy", "spectral_energy",]
@@ -447,9 +446,9 @@ Ideas for aggregation:
 '''
 def create_windowed_keylogger_features(keylog_data, empatica_data, a3):
     if a3 == True:
-        p_list = p_list_a3
+        p_list = p_list_a3_eda
     else:
-        p_list = p_list_a4
+        p_list = p_list_a4_eda
 
     log_data_windows = {} # will store new dataframes here
 

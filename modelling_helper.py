@@ -79,7 +79,7 @@ def load_each_subject_individually_modelling():
 
     print("now laoding a3 participants")
 
-    p_list_a3_use = [p.split("_")[0] for p in p_list_a3]
+    p_list_a3_use = [p.split("_")[0] for p in p_list_a3_eda]
     p_list_a3_use = list(set(p_list_a3_use))
 
     for p in p_list_a3_use:
@@ -92,7 +92,7 @@ def load_each_subject_individually_modelling():
 
     print("now laoding a4 participants")
 
-    p_list_a4_use = [p.split("_")[0] for p in p_list_a4]
+    p_list_a4_use = [p.split("_")[0] for p in p_list_a4_eda]
     p_list_a4_use = list(set(p_list_a4_use))
     for p in p_list_a4_use:
         folder_path = f"EDAModelDatasets/{p}/a4"

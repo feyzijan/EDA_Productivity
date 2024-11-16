@@ -11,13 +11,14 @@ import re
 snapshots_dir_a3 = 'code_snapshots_a3'
 snapshots_dir_a4 = 'code_snapshots_a4'
 
+
 def get_keylog_dfs():
-    empatica_data_a3 = get_empatica_data(a3=True)
-    empatica_data_a4 = get_empatica_data(a3=False)
-    keylog_data_a3 = get_keylog_data(a3=True)
-    keylog_data_a4 = get_keylog_data(a3=False)
-    _, keylog_data_a3 = clip_for_start_end_times(empatica_data_a3, keylog_data_a3, a3=True)
-    _, keylog_data_a4 = clip_for_start_end_times(empatica_data_a4, keylog_data_a4, a3=False)
+    empatica_data_a3 = get_empatica_data(a3=True,keylogger=True)
+    empatica_data_a4 = get_empatica_data(a3=False, keylogger=True)
+    keylog_data_a3 = get_keylog_data(a3=True, keylogger=True)
+    keylog_data_a4 = get_keylog_data(a3=False, keylogger=True)
+    _, keylog_data_a3 = clip_for_start_end_times(empatica_data_a3, keylog_data_a3, a3=True, keylogger=True)
+    _, keylog_data_a4 = clip_for_start_end_times(empatica_data_a4, keylog_data_a4, a3=False, keylogger=True)
 
     # start times from 0
     for key,df in keylog_data_a3.items():
@@ -32,12 +33,6 @@ def get_keylog_dfs():
         df = df.sort_values('Time').reset_index(drop=True)
         df = df.drop(columns=['Time_s'])
 
-
-    # Remove participants without start data
-    for p in a3_participants_to_remove_keylogs:
-        keylog_data_a3.pop(p)
-    for p in a4_participants_to_remove_keylogs:
-        keylog_data_a4.pop(p)
     
     print(len(keylog_data_a3), len(keylog_data_a4))
     return keylog_data_a3, keylog_data_a4
@@ -391,7 +386,7 @@ def plot_keylogger_results(df, a3=True):
         sns.lineplot(
             data=participant_df,
             x='snapshot',
-            y='autograder_error_numeric',
+            y='autograder_error',
             label='Autograder Error',
             color='red',
             ax=ax2
