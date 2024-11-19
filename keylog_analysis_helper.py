@@ -12,6 +12,29 @@ import re
 
 snapshots_dir_a3 = 'code_snapshots_a3'
 snapshots_dir_a4 = 'code_snapshots_a4'
+snapshots_dir_a3_unclipped = 'code_snapshots_a3_unclipped'
+snapshots_dir_a4_unclipped = 'code_snapshots_a4_unclipped'
+snapshots_dir_a3_unclipped_from_scratch = 'code_snapshots_a3_unclipped_from_scratch'
+snapshots_dir_a4_unclipped_from_scratch = 'code_snapshots_a4_unclipped_from_scratch' 
+
+def create_directories():
+    os.makedirs(snapshots_dir_a3, exist_ok=True)
+    os.makedirs(snapshots_dir_a4, exist_ok=True)
+    os.makedirs(snapshots_dir_a3_unclipped, exist_ok=True)
+    os.makedirs(snapshots_dir_a4_unclipped, exist_ok=True)
+    os.makedirs(snapshots_dir_a3_unclipped_from_scratch, exist_ok=True)
+    os.makedirs(snapshots_dir_a4_unclipped_from_scratch, exist_ok=True)
+
+a3_file_1 = 'bustersAgents.py'
+a3_file_2 = 'inference.py'
+a4_file_1 = 'NeuralNet.py'
+a4_file_2 = 'NeuralNetUtil.py'
+
+a3_file_1_original_path = f"archive/IncompleteAssignments/{a3_file_1}"
+a3_file_2_original_path = f"archive/IncompleteAssignments/{a3_file_2}"
+a4_file_1_original_path = f"archive/IncompleteAssignments/{a4_file_1}"
+a4_file_2_original_path = f"archive/IncompleteAssignments/{a4_file_2}"
+
 
 n_snapshot_interval_minutes = 5
 
@@ -38,26 +61,30 @@ def get_keylog_dfs():
     empatica_data_a4 = get_empatica_data(a3=False, keylogger=True)
     keylog_data_a3 = get_keylog_data(a3=True, keylogger=True)
     keylog_data_a4 = get_keylog_data(a3=False, keylogger=True)
+    keylog_data_a3_original = keylog_data_a3.copy()
+    keylog_data_a4_original = keylog_data_a4.copy()
     _, keylog_data_a3 = clip_for_start_end_times(empatica_data_a3, keylog_data_a3, a3=True, keylogger=True)
     _, keylog_data_a4 = clip_for_start_end_times(empatica_data_a4, keylog_data_a4, a3=False, keylogger=True)
 
     # start times from 0
-    for key,df in keylog_data_a3.items():
-        df["T_s"] = df["T_s"] - df["T_s"].min()
-        df['Time'] = pd.to_datetime(df['Time'])
-        df = df.sort_values('Time').reset_index(drop=True)
-        df = df.drop(columns=['Time_s'])
-        keylog_data_a3[key] = df
+    for p in keylog_data_a3.keys():
+        keylog_data_a3[p] = format_keylog_data(keylog_data_a3[p])
+        keylog_data_a3_original[p] = format_keylog_data(keylog_data_a3_original[p])
+    for p in keylog_data_a4.keys():
+        keylog_data_a4[p] = format_keylog_data(keylog_data_a4[p])
+        keylog_data_a4_original[p] = format_keylog_data(keylog_data_a4_original[p])
 
-    for key, df in keylog_data_a4.items():
-        df["T_s"] = df["T_s"] - df["T_s"].min()
-        df['Time'] = pd.to_datetime(df['Time'])
-        df = df.sort_values('Time').reset_index(drop=True)
-        df = df.drop(columns=['Time_s'])
-        keylog_data_a4[key] = df
     
     print(len(keylog_data_a3), len(keylog_data_a4))
-    return keylog_data_a3, keylog_data_a4
+    return keylog_data_a3, keylog_data_a4 , keylog_data_a3_original, keylog_data_a4_original
+
+
+def format_keylog_data(df):
+    df["T_s"] = df["T_s"] - df["T_s"].min()
+    df['Time'] = pd.to_datetime(df['Time'])
+    df = df.sort_values('Time').reset_index(drop=True)
+    # df = df.drop(columns=['Time_s'])
+    return df
 
 
 '''
@@ -127,24 +154,30 @@ def read_file_as_string(file_path):
 '''
 Create snapshots every n minutes of the active code files for each student in the dataset
 '''
-def create_snapshots(p, df, a3=True, snapshot_interval_minutes=n_snapshot_interval_minutes):
+def create_snapshots(p, df, snapshot_directory, a3=True, use_original_files=False):
 
     # Define snapshot intervals
-    snapshot_interval = pd.Timedelta(minutes=snapshot_interval_minutes)
+    snapshot_interval = pd.Timedelta(minutes=n_snapshot_interval_minutes)
     start_time = df['Time'].min() 
     end_time = df['Time'].max() + snapshot_interval
-    snapshot_times = pd.date_range(start=start_time + snapshot_interval, end=end_time, freq=f'{snapshot_interval_minutes}min')
+    snapshot_times = pd.date_range(start=start_time + snapshot_interval, end=end_time, freq=f'{n_snapshot_interval_minutes}min')
     print(f"\nCreating snapshots for p {p}, snapshots start at {start_time}, and end at {end_time}")
 
     # Define file paths and read files
-    code_file_path_bustersagent = f"/Users/feyzjan/Library/CloudStorage/OneDrive-GeorgiaInstituteofTechnology/GatechCourses/CS 8903 Research/A3_DataFiles/{p}/Session_Start_{p}/tracking/bustersAgents.py"
-    code_file_path_inference = f"/Users/feyzjan/Library/CloudStorage/OneDrive-GeorgiaInstituteofTechnology/GatechCourses/CS 8903 Research/A3_DataFiles/{p}/Session_Start_{p}/tracking/inference.py"
-    
-    code_file_path_neuralnet = f"/Users/feyzjan/Library/CloudStorage/OneDrive-GeorgiaInstituteofTechnology/GatechCourses/CS 8903 Research/A4_DataFiles/{p}/Session_Start_{p}/NeuralNet.py"
-    code_file_path_neuralnetutil = f"/Users/feyzjan/Library/CloudStorage/OneDrive-GeorgiaInstituteofTechnology/GatechCourses/CS 8903 Research/A4_DataFiles/{p}/Session_Start_{p}/NeuralNetUtil.py"
-    
+    if not use_original_files:
+        code_file_path_bustersagent = f"/Users/feyzjan/Library/CloudStorage/OneDrive-GeorgiaInstituteofTechnology/GatechCourses/CS 8903 Research/A3_DataFiles/{p}/Session_Start_{p}/tracking/bustersAgents.py"
+        code_file_path_inference = f"/Users/feyzjan/Library/CloudStorage/OneDrive-GeorgiaInstituteofTechnology/GatechCourses/CS 8903 Research/A3_DataFiles/{p}/Session_Start_{p}/tracking/inference.py"
+        code_file_path_neuralnet = f"/Users/feyzjan/Library/CloudStorage/OneDrive-GeorgiaInstituteofTechnology/GatechCourses/CS 8903 Research/A4_DataFiles/{p}/Session_Start_{p}/NeuralNet.py"
+        code_file_path_neuralnetutil = f"/Users/feyzjan/Library/CloudStorage/OneDrive-GeorgiaInstituteofTechnology/GatechCourses/CS 8903 Research/A4_DataFiles/{p}/Session_Start_{p}/NeuralNetUtil.py"
+    else:
+        code_file_path_bustersagent = a3_file_1_original_path
+        code_file_path_inference = a3_file_2_original_path 
+        code_file_path_neuralnet = a4_file_1_original_path 
+        code_file_path_neuralnetutil = a4_file_2_original_path
+
+
     assignment = "a3" if a3 else "a4"
-    snapshots_dir = snapshots_dir_a3 if a3 else snapshots_dir_a4
+    snapshots_dir = snapshot_directory
 
     try:
         if a3:
@@ -184,6 +217,7 @@ def create_snapshots(p, df, a3=True, snapshot_interval_minutes=n_snapshot_interv
 
         # Filter changes up to the current snapshot time
         changes_up_to_snapshot = df[df['Time'] <= snapshot_time]
+        changes_in_snapshot = df[(df['Time'] > last_snapshot_time) & (df['Time'] <= snapshot_time)]
 
         # Update the snapshot column
         df.loc[
@@ -191,6 +225,12 @@ def create_snapshots(p, df, a3=True, snapshot_interval_minutes=n_snapshot_interv
             (df['Time'] <= snapshot_time) &
             (df['snapshot'] == 0),
             'snapshot'] = snapshot_counter
+        
+        if changes_in_snapshot.empty:
+            print(f"No changes detected in snapshot {snapshot_counter}, skipping save.")
+            last_snapshot_time = snapshot_time
+            continue  # Skip to the next snapshot
+
         last_snapshot_time = snapshot_time
 
         print("Number of changes up to this snapshot time: ", len(changes_up_to_snapshot))
@@ -200,7 +240,8 @@ def create_snapshots(p, df, a3=True, snapshot_interval_minutes=n_snapshot_interv
             file_name = row['file_name']
 
             if file_name not in files_content:
-                raise Exception(f"File {file_name} not recognized")
+                print(f"error File {file_name} not recognized")
+                continue
 
             # Get the content changes
             try:
@@ -236,14 +277,12 @@ def create_snapshots(p, df, a3=True, snapshot_interval_minutes=n_snapshot_interv
 Move the necessary assignment files to each snapshot directory so we can run the autograder.
 - May be more efficient to move the snapshots somewhere else and run the autograder from there, but this does the job.
 '''
-def move_assignment_files(a3=True):
+def move_assignment_files(a3=True, code_snapshots_dir=None):
     # Define the directories
     if a3:
-        code_snapshots_dir = 'code_snapshots_a3'
         files_to_copy_dir = 'a3_files_to_copy'
     else:
         files_to_copy_dir = 'a4_files_to_copy'
-        code_snapshots_dir = 'code_snapshots_a4'
 
     # Check if the directories exist
     if not os.path.isdir(code_snapshots_dir):
@@ -354,15 +393,13 @@ def run_autograder_for_question(tracking_dir, question, command):
 """
 Run the autograder on each snapshot directory for each question and save the results to a dataframe.
 """
-def run_local_autograder(a3=True,start_idx=0, end_idx=-1):
+def run_local_autograder(a3=True, snapshots_dir = None, start_idx=0, end_idx=-1):
 
     # Set assignment parameters
     if a3:
-        snapshots_dir = 'code_snapshots_a3'
         files_to_measure = ['bustersAgents.py', 'inference.py']
         autograder_commands = a3_autograder_commands
     else:
-        snapshots_dir = 'code_snapshots_a4'
         files_to_measure = ['NeuralNet.py', 'NeuralNetUtil.py']
         autograder_commands = a4_autograder_commands
 
@@ -459,12 +496,18 @@ def run_local_autograder(a3=True,start_idx=0, end_idx=-1):
                         print(f"Error processing question {question}: {e}")
                         row[f"{question}_points"] = 0
 
-
         data.append(row)
 
     df = pd.DataFrame(data)
     df.sort_values(by=['participant', 'snapshot'], inplace=True)
     df.reset_index(drop=True, inplace=True)
+
+    # create total_points column
+    for question in autograder_commands.keys():
+        df[f"{question}_points"] = df[f"{question}_points"].fillna(0)
+        df['total_points'] = df[[f"{question}_points" for question in autograder_commands.keys()]].sum(axis=1)
+        # create another sum that takes the max for each question up to that point
+        df['total_points_max'] = df[[f"{question}_points" for question in autograder_commands.keys()]].cummax(axis=1).sum(axis=1)
 
     return df
 
@@ -485,59 +528,60 @@ def check_syntax(file_path):
 
 
 
-
-def plot_keylogger_results(df, a3=True):
+def plot_keylogger_results(df, a3=True, plot_lengths=False):
     participants = df['participant'].unique()
     for participant in participants:
         # Filter data for the participant
         participant_df = df[df['participant'] == participant]
         
-        # Set up the figure
-        plt.figure(figsize=(8, 6))
-
+        # Set up the figure with two subplots side by side
+        fig, axes = plt.subplots(1, 2, figsize=(16, 6))
+        
         file_1_length = 'bustersAgents.py_length' if a3 else 'NeuralNet.py_length'
         file_2_length = 'inference.py_length' if a3 else 'NeuralNetUtil.py_length'
 
         print(file_1_length, file_2_length)
         
-        # Plot the lengths
+        # Plot 1: File lengths over snapshots
+        if plot_lengths:
+            sns.lineplot(
+                data=participant_df,
+                x='snapshot',
+                y=file_1_length,
+                label=file_1_length,
+                ax=axes[0]
+            )
+            sns.lineplot(
+                data=participant_df,
+                x='snapshot',
+                y=file_2_length,
+                label=file_2_length,
+                ax=axes[0]
+            )
+            axes[0].set_title(f'File Lengths for Participant {participant}')
+            axes[0].set_xlabel('Snapshot Number')
+            axes[0].set_ylabel('File Length (Characters)')
+            axes[0].legend(loc='upper left')
+
+        # Plot 2: Total points earned over snapshots
         sns.lineplot(
             data=participant_df,
             x='snapshot',
-            y=file_1_length,
-            label= file_1_length
-        )
-        sns.lineplot(
-            data=participant_df,
-            x='snapshot',
-            y= file_2_length,
-            label= file_2_length
-        )
-        
-        # Create a twin axis to plot autograder_error
-        ax1 = plt.gca()
-        ax2 = ax1.twinx()
-        sns.lineplot(
-            data=participant_df,
-            x='snapshot',
-            y='autograder_error',
-            label='Autograder Error',
+            y='total_points_max',
+            label='Total Points Max',
             color='red',
-            ax=ax2
+            ax=axes[1]
         )
-        ax2.set_ylabel('Autograder Error (1=Error, 0=No Error)')
-        ax2.set_ylim(-0.1, 1.1)  # Set y-limits for binary data
+        axes[1].set_title(f'Total Points Earned for Participant {participant}')
+        axes[1].set_xlabel('Snapshot Number')
+        axes[1].set_ylabel('Total Points')
+        axes[1].set_ylim(0, participant_df['total_points_max'].max() + 1)  # Adjust Y-axis limits if needed
+        axes[1].legend(loc='upper left')
+
+        # Adjust layout for better visualization
+        plt.suptitle(f'Assignment {"a3" if a3 else "a4"}, Participant {participant}')
+        plt.tight_layout(rect=[0, 0, 1, 0.96])  # Add space for the main title
         
-        # Customize the plot
-        a_label = "a3" if a3 else "a4"
-        plt.title(f'Assignment:{a_label}, Participant {participant} - Code Lengths and Autograder Errors Over Snapshots')
-        ax1.set_xlabel('Snapshot Number')
-        ax1.set_ylabel('File Length (Characters)')
-        ax1.legend(loc='upper left')
-        ax2.legend(loc='upper right')
-        
-        # Show the plot
+        # Show the plots
         plt.show()
-
-
 

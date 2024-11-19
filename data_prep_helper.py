@@ -156,7 +156,6 @@ def get_keylog_data(a3, keylogger=False) -> dict:
             print("Keylog data for P9, length = ", len(df))
             print(log_path)
 
-
     return data_dict
 
 '''
