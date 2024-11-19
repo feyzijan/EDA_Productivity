@@ -117,8 +117,11 @@ def get_keylog_data(a3, keylogger=False) -> dict:
     data_dict = {}
     
 
+    print("Getting keylog data for a3 =",a3)
+
     for p in p_list:
         log_path = os.path.join(path, p, "extra_credit.log")
+        print("\n Log path for ", p, " is ", log_path)
 
         # load data
         with open(log_path) as f:
@@ -148,6 +151,11 @@ def get_keylog_data(a3, keylogger=False) -> dict:
         df.drop(columns=['contentChanges'], inplace=True)
     
         data_dict[p] = df
+
+        if p == "P9":
+            print("Keylog data for P9, length = ", len(df))
+            print(log_path)
+
 
     return data_dict
 
