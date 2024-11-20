@@ -9,7 +9,10 @@ import pandas as pd
 import concurrent.futures
 import subprocess
 import re
+import py_compile
 
+
+# Directories to store snapshots
 snapshots_dir_a3 = 'code_snapshots_a3'
 snapshots_dir_a4 = 'code_snapshots_a4'
 snapshots_dir_a3_unclipped = 'code_snapshots_a3_unclipped'
@@ -25,6 +28,7 @@ def create_directories():
     os.makedirs(snapshots_dir_a3_unclipped_from_scratch, exist_ok=True)
     os.makedirs(snapshots_dir_a4_unclipped_from_scratch, exist_ok=True)
 
+# File name and paths to their unedited versions
 a3_file_1 = 'bustersAgents.py'
 a3_file_2 = 'inference.py'
 a4_file_1 = 'NeuralNet.py'
@@ -35,9 +39,11 @@ a3_file_2_original_path = f"archive/IncompleteAssignments/{a3_file_2}"
 a4_file_1_original_path = f"archive/IncompleteAssignments/{a4_file_1}"
 a4_file_2_original_path = f"archive/IncompleteAssignments/{a4_file_2}"
 
-
+# Snapshot interval
 n_snapshot_interval_minutes = 5
 
+
+# Commands to run the autograders for each question
 a3_autograder_commands = {
     'q1': ['python autograder.py -q q1 --no-graphics',3],
     'q2': ['python autograder.py -q q2 --no-graphics',4],
@@ -56,29 +62,29 @@ a4_autograder_commands = {
 }
 
 
+# get the keylog data for both assignments, return clipped and unclipped versions
+# TODO: Instead of clipping for the start end times, return another dictionary with the start time of the EDA signal
+# so i can do manual checking
 def get_keylog_dfs():
     empatica_data_a3 = get_empatica_data(a3=True,keylogger=True)
     empatica_data_a4 = get_empatica_data(a3=False, keylogger=True)
     keylog_data_a3 = get_keylog_data(a3=True, keylogger=True)
     keylog_data_a4 = get_keylog_data(a3=False, keylogger=True)
-    keylog_data_a3_original = keylog_data_a3.copy()
-    keylog_data_a4_original = keylog_data_a4.copy()
-    _, keylog_data_a3 = clip_for_start_end_times(empatica_data_a3, keylog_data_a3, a3=True, keylogger=True)
-    _, keylog_data_a4 = clip_for_start_end_times(empatica_data_a4, keylog_data_a4, a3=False, keylogger=True)
+    # _, keylog_data_a3 = clip_for_start_end_times(empatica_data_a3, keylog_data_a3, a3=True, keylogger=True)
+    # _, keylog_data_a4 = clip_for_start_end_times(empatica_data_a4, keylog_data_a4, a3=False, keylogger=True)
 
     # start times from 0
     for p in keylog_data_a3.keys():
         keylog_data_a3[p] = format_keylog_data(keylog_data_a3[p])
-        keylog_data_a3_original[p] = format_keylog_data(keylog_data_a3_original[p])
     for p in keylog_data_a4.keys():
         keylog_data_a4[p] = format_keylog_data(keylog_data_a4[p])
-        keylog_data_a4_original[p] = format_keylog_data(keylog_data_a4_original[p])
 
     
     print(len(keylog_data_a3), len(keylog_data_a4))
-    return keylog_data_a3, keylog_data_a4 , keylog_data_a3_original, keylog_data_a4_original
+    return keylog_data_a3, keylog_data_a4 
 
 
+# Normalize time and drop some columns
 def format_keylog_data(df):
     df["T_s"] = df["T_s"] - df["T_s"].min()
     df['Time'] = pd.to_datetime(df['Time'])
@@ -88,7 +94,7 @@ def format_keylog_data(df):
 
 
 '''
-Print session length, max interval between no keystrokes
+Print session length, max interval between no keystrokes. For reference.
 '''
 def print_time_info(p,df,n):
     total_time = (df['T_s'].max() - df['T_s'].min()) /60
@@ -101,8 +107,9 @@ def print_time_info(p,df,n):
 
 
 '''
-
+Given a file as a string and a row of the keylog dataframe, apply the change
 '''
+# TODO: Check how this handles special characters, verify manually again
 def apply_change(file_content, row):
     """
     Applies a change to the file_content string based on a single content change event.
@@ -124,11 +131,11 @@ def apply_change(file_content, row):
     # end_offset = min(range_offset + range_length, file_length)
     end_offset = range_offset + range_length
 
-   	# •	Insertion: RangeLength = 0 and text:non-empty. - seems ok
+   	# •	Insertion: RangeLength = 0 and text:non-empty
     if range_length == 0 and new_text != "":
         file_content = file_content[:range_offset] + new_text + file_content[end_offset:]
        
-	# •	÷Deletion: rangeLength >0. text:empty - seems ok
+	# •	Deletion: rangeLength >0. text:empty
     elif range_length > 0 and new_text == "":
         file_content = file_content[:range_offset] + file_content[end_offset:]
 
@@ -137,15 +144,9 @@ def apply_change(file_content, row):
         file_content = file_content[:range_offset] + new_text + file_content[end_offset:]
     else:
         print("Invalid change event:", row)
-
-    # check if we ever have range_length = 0 and text:3empty
-
     return file_content
 
 
-'''
-Read file as single block of string
-'''
 def read_file_as_string(file_path):
     with open(file_path, 'r') as f:
         return f.read()
@@ -154,7 +155,10 @@ def read_file_as_string(file_path):
 '''
 Create snapshots every n minutes of the active code files for each student in the dataset
 '''
-def create_snapshots(p, df, snapshot_directory, a3=True, use_original_files=False):
+# TODO: Check snapshot 0, 1 and -1
+def create_snapshots(p, df, snapshot_base_dir, a3=True, use_original_files=False):
+
+    assignment = "a3" if a3 else "a4"
 
     # Define snapshot intervals
     snapshot_interval = pd.Timedelta(minutes=n_snapshot_interval_minutes)
@@ -163,7 +167,7 @@ def create_snapshots(p, df, snapshot_directory, a3=True, use_original_files=Fals
     snapshot_times = pd.date_range(start=start_time + snapshot_interval, end=end_time, freq=f'{n_snapshot_interval_minutes}min')
     print(f"\nCreating snapshots for p {p}, snapshots start at {start_time}, and end at {end_time}")
 
-    # Define file paths and read files
+    # Determine file paths
     if not use_original_files:
         code_file_path_bustersagent = f"/Users/feyzjan/Library/CloudStorage/OneDrive-GeorgiaInstituteofTechnology/GatechCourses/CS 8903 Research/A3_DataFiles/{p}/Session_Start_{p}/tracking/bustersAgents.py"
         code_file_path_inference = f"/Users/feyzjan/Library/CloudStorage/OneDrive-GeorgiaInstituteofTechnology/GatechCourses/CS 8903 Research/A3_DataFiles/{p}/Session_Start_{p}/tracking/inference.py"
@@ -175,10 +179,7 @@ def create_snapshots(p, df, snapshot_directory, a3=True, use_original_files=Fals
         code_file_path_neuralnet = a4_file_1_original_path 
         code_file_path_neuralnetutil = a4_file_2_original_path
 
-
-    assignment = "a3" if a3 else "a4"
-    snapshots_dir = snapshot_directory
-
+    # Read files
     try:
         if a3:
             original_files_content = {
@@ -195,9 +196,9 @@ def create_snapshots(p, df, snapshot_directory, a3=True, use_original_files=Fals
         print("File paths are ", code_file_path_bustersagent, code_file_path_inference)
         raise FileNotFoundError
 
-    # Save the initial version of the files
+    # Save the initial version of the files : snapshot 0
     counter = 0
-    initial_snapshot_path = os.path.join(snapshots_dir, f'{assignment}_{p}_c{counter}')
+    initial_snapshot_path = os.path.join(snapshot_base_dir, f'{assignment}_{p}_c{counter}')
     counter +=1
     os.makedirs(initial_snapshot_path, exist_ok=True)
     for file_name, content in original_files_content.items():
@@ -205,37 +206,38 @@ def create_snapshots(p, df, snapshot_directory, a3=True, use_original_files=Fals
             f.write(content)
     print(f"Saved initial snapshot: {initial_snapshot_path}")
 
-    # initialize snapshot column
+
+    # Iterate over the dataframe, saving snapshots in different folders
     df['snapshot'] = 0
     last_snapshot_time = start_time -  snapshot_interval
-    # Iterate over each snapshot time
+
+
     for snapshot_counter, snapshot_time in enumerate(snapshot_times, start=1):
         print(f"Processing snapshot {snapshot_counter} for participant {p} at {snapshot_time}")
 
-        # TODO: May just continue using the updated files_content
+        # Copy the original files content so you can apply all changes in order
         files_content = original_files_content.copy()
 
         # Filter changes up to the current snapshot time
         changes_up_to_snapshot = df[df['Time'] <= snapshot_time]
         changes_in_snapshot = df[(df['Time'] > last_snapshot_time) & (df['Time'] <= snapshot_time)]
+        print("Number of changes up to this snapshot time: ", len(changes_up_to_snapshot))
 
-        # Update the snapshot column
+        # Update the snapshot column to the correct counter
         df.loc[
             (df['Time'] > last_snapshot_time) &
             (df['Time'] <= snapshot_time) &
             (df['snapshot'] == 0),
             'snapshot'] = snapshot_counter
         
+        last_snapshot_time = snapshot_time
+        
+        # Skip saving if there are no changes
         if changes_in_snapshot.empty:
             print(f"No changes detected in snapshot {snapshot_counter}, skipping save.")
-            last_snapshot_time = snapshot_time
             continue  # Skip to the next snapshot
 
-        last_snapshot_time = snapshot_time
-
-        print("Number of changes up to this snapshot time: ", len(changes_up_to_snapshot))
-
-        # Apply changes sequentially
+        # Apply changes sequentially for each file
         for index, row in changes_up_to_snapshot.iterrows():
             file_name = row['file_name']
 
@@ -251,10 +253,10 @@ def create_snapshots(p, df, snapshot_directory, a3=True, use_original_files=Fals
                 print("row details are ", row)
                 raise e
 
-        # Save the current state of the files
+        # Save the current state of the two files (even if one has not changed at all)
         snapshot_filename = f'{assignment}_{p}_c{snapshot_counter}'
-        counter +=1
-        snapshot_path = os.path.join(snapshots_dir, snapshot_filename)
+        counter += 1
+        snapshot_path = os.path.join(snapshot_base_dir, snapshot_filename)
         os.makedirs(snapshot_path, exist_ok=True)
 
         for file_name, content in files_content.items():
@@ -278,41 +280,26 @@ Move the necessary assignment files to each snapshot directory so we can run the
 - May be more efficient to move the snapshots somewhere else and run the autograder from there, but this does the job.
 '''
 def move_assignment_files(a3=True, code_snapshots_dir=None):
-    # Define the directories
-    if a3:
-        files_to_copy_dir = 'a3_files_to_copy'
-    else:
-        files_to_copy_dir = 'a4_files_to_copy'
+
+    files_to_copy_dir = 'a3_files_to_copy' if a3 else 'a4_files_to_copy'
 
     # Check if the directories exist
-    if not os.path.isdir(code_snapshots_dir):
-        print(f"Error: Directory '{code_snapshots_dir}' does not exist.")
-        return
-
-    if not os.path.isdir(files_to_copy_dir):
-        print(f"Error: Directory '{files_to_copy_dir}' does not exist.")
+    if not os.path.isdir(code_snapshots_dir) or not os.path.isdir(files_to_copy_dir):
+        print(f"Error: Directory '{code_snapshots_dir} or {files_to_copy_dir}' does not exist.")
         return
 
     # Get a list of snapshot directories
     snapshot_dirs = [os.path.join(code_snapshots_dir, d) for d in os.listdir(code_snapshots_dir) if os.path.isdir(os.path.join(code_snapshots_dir, d))]
 
-    # Process each snapshot directory
+    # Move files to each snapshot directory
     for snapshot_dir in snapshot_dirs:
         print(f"Processing '{snapshot_dir}'...")
 
-        # Step 1: Copy contents of a3_files_to_copy into the snapshot directory
+        # Copy all the other code files needed for the autograder to run
         copy_files(files_to_copy_dir, snapshot_dir)
 
-        # Step 2: Move 'inference.py' and 'bustersAgents.py' into the 'tracking' folder
-        if a3:
-            target_dir = os.path.join(snapshot_dir, 'tracking')
-        else:
-            target_dir = snapshot_dir
-
-        # Ensure the 'tracking' directory exists
-        if not os.path.isdir(target_dir):
-            print(f"Error: Tracking directory '{target_dir}' does not exist after copying.")
-            continue
+        # For a3  Move 'inference.py' and 'bustersAgents.py' into the 'tracking' folder
+        target_dir = os.path.join(snapshot_dir, 'tracking') if a3 else snapshot_dir
 
         if a3:
             move_file_if_exists(os.path.join(snapshot_dir, 'inference.py'), target_dir)
@@ -323,10 +310,8 @@ def move_assignment_files(a3=True, code_snapshots_dir=None):
 
     print("All snapshots have been processed.")
 
+
 def copy_files(src_dir, dest_dir):
-    """
-    Copy all files and directories from src_dir to dest_dir.
-    """
     for item in os.listdir(src_dir):
         s = os.path.join(src_dir, item)
         d = os.path.join(dest_dir, item)
@@ -350,13 +335,14 @@ def move_file_if_exists(file_path, dest_dir):
             print(f"Moved '{os.path.basename(file_path)}' to '{dest_dir}'.")
         except Exception as e:
             print(f"Error moving '{file_path}' to '{dest_dir}': {e}")
+            raise e
     else:
         print(f"Warning: '{file_path}' does not exist and cannot be moved.")
-
+        raise FileNotFoundError
 
 
 """ 
-Run autograder for a given question
+Run autograder for a given question - used for parallel processing
 """
 def run_autograder_for_question(tracking_dir, question, command):
     points_earned = 0
@@ -368,7 +354,7 @@ def run_autograder_for_question(tracking_dir, question, command):
         # print("autograder result is:", result)
         # print("stdout is:", result.stdout)
 
-        # Extract total points if the pattern exists in stdout
+        # Extract total points if the pattern exists in stdout via regex "eg. Total: 3/3"
         pattern = r'Total:\s(\d+)/(\d+)'
         # print(str(result))
         match = re.search(pattern, str(result))
@@ -387,7 +373,6 @@ def run_autograder_for_question(tracking_dir, question, command):
     except Exception as e:
         print(f"For {question} error running autograder in {tracking_dir}: {e}")
         return (question, 0, True)
-    
 
 
 """
@@ -396,13 +381,8 @@ Run the autograder on each snapshot directory for each question and save the res
 def run_local_autograder(a3=True, snapshots_dir = None, start_idx=0, end_idx=-1):
 
     # Set assignment parameters
-    if a3:
-        files_to_measure = ['bustersAgents.py', 'inference.py']
-        autograder_commands = a3_autograder_commands
-    else:
-        files_to_measure = ['NeuralNet.py', 'NeuralNetUtil.py']
-        autograder_commands = a4_autograder_commands
-
+    files_to_measure = ['bustersAgents.py', 'inference.py'] if a3 else ['NeuralNet.py', 'NeuralNetUtil.py']
+    autograder_commands = a3_autograder_commands if a3 else a4_autograder_commands
     data = []
 
     # Loop over snapshot directories in alphabetical order
@@ -436,7 +416,6 @@ def run_local_autograder(a3=True, snapshots_dir = None, start_idx=0, end_idx=-1)
             else:
                 file_lengths[file_name] = 0  # File not found, length 0
 
-
         # Initialize row to add to dataframe
         row = {
             'participant': participant_num,
@@ -455,32 +434,10 @@ def run_local_autograder(a3=True, snapshots_dir = None, start_idx=0, end_idx=-1)
             row[file_name + '_length'] = file_lengths.get(file_name, 0)
         
 
-        # Run autograder
+        # Run autograder in parallel
         autograder_path = os.path.join(tracking_dir, 'autograder.py')
 
         if os.path.isfile(autograder_path):
-            # for question, command in autograder_commands.items():
-            #     # cmd = command[0].split()
-            #     cmd = command[0].split()
-            #     max_points = command[1]
-            #     print("\nRunning autograder for question" , question)
-            #     try:
-            #         result = subprocess.run(cmd, cwd=tracking_dir, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-            #         autograder_error = result.returncode != 0
-            #         print("autograder result is:", result)
-            #         print("stdout is:", result.stdout)
-            #         # TODO: Read the point from Total: int/int
-            #     except subprocess.TimeoutExpired:
-            #         print(f"Autograder timed out in {tracking_dir}")
-            #         autograder_error = True
-            #     except Exception as e:
-            #         print(f"Error running autograder in {tracking_dir}: {e}")
-            #         autograder_error = True
-
-            #     points = max_points if not autograder_error else 0
-            #     # TODO: Check if there are partial points
-            #     row[f"{question}_points"] = points
-    
 
             with concurrent.futures.ThreadPoolExecutor() as executor:
                 future_to_question = {
@@ -511,9 +468,9 @@ def run_local_autograder(a3=True, snapshots_dir = None, start_idx=0, end_idx=-1)
 
     return df
 
-
-
-import py_compile
+"""
+Check if a file compiles , will add this info to the dataframe
+"""
 def check_syntax(file_path):
     try:
         py_compile.compile(file_path, doraise=True)
@@ -525,9 +482,11 @@ def check_syntax(file_path):
     except Exception as e:
         print(f"An unexpected error occurred while checking {file_path}:\n{e}")
         return 0
+    
 
-
-
+"""
+Plot some stuff
+"""
 def plot_keylogger_results(df, a3=True, plot_lengths=False):
     participants = df['participant'].unique()
     for participant in participants:

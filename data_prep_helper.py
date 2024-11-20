@@ -158,6 +158,7 @@ def get_keylog_data(a3, keylogger=False) -> dict:
 
     return data_dict
 
+
 '''
 For every log data find the successive words where "starting" first appears
 Here's how we filter for the relevant log data, filtering in order:
@@ -170,9 +171,26 @@ End:
 - Must be before the last button press
 - Must be before typing ending (if any)
 
-
-
 '''
+
+
+def return_eda_times(empatica_data, keylogger=False, a3=False):
+    if a3 == True:
+        p_list = p_list_a3_eda if keylogger == False else p_list_a3_log_analysis
+    else:
+        p_list = p_list_a4_eda if keylogger == False else p_list_a4_log_analysis
+
+    start_times = {}
+    end_times = {}
+    for p in p_list:
+        start_times[p] = empatica_data[p]["EDA"]["Time"].iloc[0]
+        end_times[p] = empatica_data[p]["EDA"]["Time"].iloc[-1]
+
+    return start_times, end_times
+
+
+
+
 def clip_for_start_end_times(empatica_data, keylog_data, a3, keylogger=False):
     if a3 == True:
         p_list = p_list_a3_eda if keylogger == False else p_list_a3_log_analysis
@@ -186,7 +204,7 @@ def clip_for_start_end_times(empatica_data, keylog_data, a3, keylogger=False):
         end_time = empatica_data[p]["EDA"]["Time"].iloc[-1]
         keylog_data[p] = keylog_data[p][keylog_data[p]["Time"] > start_time]
         keylog_data[p] = keylog_data[p][keylog_data[p]["Time"] < end_time]
-        
+
     start_locs = {}
     end_locs = {}
     # check for "Starting" string
@@ -196,7 +214,8 @@ def clip_for_start_end_times(empatica_data, keylog_data, a3, keylogger=False):
             keylog_data[p][f'text_{i}'] = keylog_data[p]['text'].shift(-i)
             
         keylog_data[p]["flag"] = keylog_data[p]["text"] + keylog_data[p]["text_1"] + keylog_data[p]["text_2"] + keylog_data[p]["text_3"] + keylog_data[p]["text_4"] + keylog_data[p]["text_5"] + keylog_data[p]["text_6"] + keylog_data[p]["text_7"]
-        # find the start of the experiment - first time the flag is "start", if there is such
+        
+        # Start: find the start of the experiment - first time the flag is "start", if there is such
         if "starting" in keylog_data[p]["flag"].values:
             start_locs[p] = keylog_data[p][keylog_data[p]["flag"] == "starting"].index[0]
         elif "Starting" in keylog_data[p]["flag"].values:
@@ -204,7 +223,7 @@ def clip_for_start_end_times(empatica_data, keylog_data, a3, keylogger=False):
         else:
             start_locs[p] = -1
 
-        # find the end of the experiment - first time the flag is "ending" or "finishing"
+        # End: find the end of the experiment - first time the flag is "ending" or "finishing"
         if "ending" in keylog_data[p]["flag"].values:
             end_locs[p] = keylog_data[p][keylog_data[p]["flag"] == "ending"].index[0]
         elif "Ending" in keylog_data[p]["flag"].values:
