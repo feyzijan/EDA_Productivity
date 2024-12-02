@@ -15,18 +15,10 @@ import py_compile
 # Directories to store snapshots
 snapshots_dir_a3 = 'code_snapshots_a3'
 snapshots_dir_a4 = 'code_snapshots_a4'
-snapshots_dir_a3_unclipped = 'code_snapshots_a3_unclipped'
-snapshots_dir_a4_unclipped = 'code_snapshots_a4_unclipped'
-snapshots_dir_a3_unclipped_from_scratch = 'code_snapshots_a3_unclipped_from_scratch'
-snapshots_dir_a4_unclipped_from_scratch = 'code_snapshots_a4_unclipped_from_scratch' 
 
 def create_directories():
     os.makedirs(snapshots_dir_a3, exist_ok=True)
     os.makedirs(snapshots_dir_a4, exist_ok=True)
-    os.makedirs(snapshots_dir_a3_unclipped, exist_ok=True)
-    os.makedirs(snapshots_dir_a4_unclipped, exist_ok=True)
-    os.makedirs(snapshots_dir_a3_unclipped_from_scratch, exist_ok=True)
-    os.makedirs(snapshots_dir_a4_unclipped_from_scratch, exist_ok=True)
 
 # File name and paths to their unedited versions
 a3_file_1 = 'bustersAgents.py'
@@ -62,25 +54,18 @@ a4_autograder_commands = {
 }
 
 
-# get the keylog data for both assignments, return clipped and unclipped versions
-# TODO: Instead of clipping for the start end times, return another dictionary with the start time of the EDA signal
-# so i can do manual checking
+"""
+Get the keylog data for both assignments
+"""
 def get_keylog_dfs():
-    empatica_data_a3 = get_empatica_data(a3=True,keylogger=True)
-    empatica_data_a4 = get_empatica_data(a3=False, keylogger=True)
     keylog_data_a3 = get_keylog_data(a3=True, keylogger=True)
     keylog_data_a4 = get_keylog_data(a3=False, keylogger=True)
-    # _, keylog_data_a3 = clip_for_start_end_times(empatica_data_a3, keylog_data_a3, a3=True, keylogger=True)
-    # _, keylog_data_a4 = clip_for_start_end_times(empatica_data_a4, keylog_data_a4, a3=False, keylogger=True)
 
-    # start times from 0
     for p in keylog_data_a3.keys():
         keylog_data_a3[p] = format_keylog_data(keylog_data_a3[p])
     for p in keylog_data_a4.keys():
         keylog_data_a4[p] = format_keylog_data(keylog_data_a4[p])
-
     
-    print(len(keylog_data_a3), len(keylog_data_a4))
     return keylog_data_a3, keylog_data_a4 
 
 
@@ -146,6 +131,49 @@ def apply_change(file_content, row):
         print("Invalid change event:", row)
     return file_content
 
+def apply_change_2(file_content, row):
+    """
+    Applies a change to the file_content string based on line and character positions.
+
+    Parameters:
+    - file_content: String representing the entire file content.
+    - row: A dictionary representing a content change event.
+
+    Returns:
+    - Updated file content string.
+    """
+    # Split the file content into lines, keeping line endings
+    lines = file_content.splitlines(keepends=True)  # Keep line endings to preserve the original content
+
+    # Extract change details
+    start_line = int(row['start_line'])
+    start_character = int(row['start_character'])
+    end_line = int(row['end_line'])
+    end_character = int(row['end_character'])
+    new_text = row['text']
+
+    # Normalize newlines in new_text
+    new_text = new_text.replace('\r\n', '\n').replace('\r', '\n')
+
+    # Ensure indices are within bounds
+    if start_line >= len(lines):
+        print(f"Start line {start_line} is beyond the end of the file.")
+        return file_content
+    if end_line >= len(lines):
+        print(f"End line {end_line} is beyond the end of the file.")
+        return file_content
+
+    # Extract the text before the change
+    before_change = ''.join(lines[:start_line]) + lines[start_line][:start_character]
+
+    # Extract the text after the change
+    after_change = lines[end_line][end_character:] + ''.join(lines[end_line+1:])
+
+    # Combine to form the new file content
+    file_content = before_change + new_text + after_change
+
+    return file_content
+
 
 def read_file_as_string(file_path):
     with open(file_path, 'r') as f:
@@ -156,16 +184,17 @@ def read_file_as_string(file_path):
 Create snapshots every n minutes of the active code files for each student in the dataset
 '''
 # TODO: Check snapshot 0, 1 and -1
-def create_snapshots(p, df, snapshot_base_dir, a3=True, use_original_files=False):
+def create_snapshots(p, df, eda_start_time, a3=True, use_original_files=False):
 
     assignment = "a3" if a3 else "a4"
+    snapshot_base_dir = snapshots_dir_a3 if a3 else snapshots_dir_a4
 
     # Define snapshot intervals
     snapshot_interval = pd.Timedelta(minutes=n_snapshot_interval_minutes)
-    start_time = df['Time'].min() 
+    start_time = eda_start_time
     end_time = df['Time'].max() + snapshot_interval
-    snapshot_times = pd.date_range(start=start_time + snapshot_interval, end=end_time, freq=f'{n_snapshot_interval_minutes}min')
-    print(f"\nCreating snapshots for p {p}, snapshots start at {start_time}, and end at {end_time}")
+    snapshot_times = pd.date_range(start=start_time , end=end_time, freq=f'{n_snapshot_interval_minutes}min')
+    print(f"\nCreating snapshots for p {p}, snapshots start at {start_time}, and end at {end_time}, the min time was {df['Time'].min()}")
 
     # Determine file paths
     if not use_original_files:
@@ -204,7 +233,7 @@ def create_snapshots(p, df, snapshot_base_dir, a3=True, use_original_files=False
     for file_name, content in original_files_content.items():
         with open(os.path.join(initial_snapshot_path, file_name), 'w') as f:
             f.write(content)
-    print(f"Saved initial snapshot: {initial_snapshot_path}")
+    print(f"Saved initial snapshot for participant {p}, represeting the start time of {df['Time'].min()}")
 
 
     # Iterate over the dataframe, saving snapshots in different folders
@@ -213,7 +242,7 @@ def create_snapshots(p, df, snapshot_base_dir, a3=True, use_original_files=False
 
 
     for snapshot_counter, snapshot_time in enumerate(snapshot_times, start=1):
-        print(f"Processing snapshot {snapshot_counter} for participant {p} at {snapshot_time}")
+        print(f"\nProcessing snapshot {snapshot_counter} for participant {p} at {snapshot_time}")
 
         # Copy the original files content so you can apply all changes in order
         files_content = original_files_content.copy()
@@ -221,7 +250,7 @@ def create_snapshots(p, df, snapshot_base_dir, a3=True, use_original_files=False
         # Filter changes up to the current snapshot time
         changes_up_to_snapshot = df[df['Time'] <= snapshot_time]
         changes_in_snapshot = df[(df['Time'] > last_snapshot_time) & (df['Time'] <= snapshot_time)]
-        print("Number of changes up to this snapshot time: ", len(changes_up_to_snapshot))
+        # print("Number of changes up to this snapshot time: ", len(changes_up_to_snapshot))
 
         # Update the snapshot column to the correct counter
         df.loc[
@@ -234,8 +263,12 @@ def create_snapshots(p, df, snapshot_base_dir, a3=True, use_original_files=False
         
         # Skip saving if there are no changes
         if changes_in_snapshot.empty:
-            print(f"No changes detected in snapshot {snapshot_counter}, skipping save.")
-            continue  # Skip to the next snapshot
+            print(f"No changes detected in snapshot {snapshot_counter}")
+        # print the number of changes per file
+        else:
+            print(f"Number of changes:")
+            print(changes_in_snapshot.groupby('file_name').size().reset_index(name='counts'))
+
 
         # Apply changes sequentially for each file
         for index, row in changes_up_to_snapshot.iterrows():
@@ -264,6 +297,11 @@ def create_snapshots(p, df, snapshot_base_dir, a3=True, use_original_files=False
                 f.write(content)
 
         print(f"Saved snapshot: {snapshot_filename}")
+
+        # check if the two files compile
+        for file_name in files_content.keys():
+            compiles = check_syntax(os.path.join(snapshot_path, file_name))
+            print(f"Syntax check for {file_name} in snapshot {snapshot_counter}: {'Success' if compiles else 'Failed'}")
 
     # Assign snapshot number to any remaining rows
     if len(df[df['snapshot'] == 0]) > 0:
@@ -477,7 +515,8 @@ def check_syntax(file_path):
         # print(f"{file_path} compiled successfully. No syntax errors found.")
         return 1
     except py_compile.PyCompileError as compile_error:
-        print(f"Syntax error in {file_path}:\n{compile_error}")
+        # print(f"Syntax error in {file_path}:")
+        # print("Error details are ", compile_error)
         return 0
     except Exception as e:
         print(f"An unexpected error occurred while checking {file_path}:\n{e}")
