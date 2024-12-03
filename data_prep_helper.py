@@ -124,12 +124,8 @@ def get_keylog_data(a3, keylogger=False) -> dict:
 
     for p in p_list:
         log_path = os.path.join(path, p, "extra_credit.log")
+        
         # print("\n Log path for ", p, " is ", log_path)
-
-        # load data
-        with open(log_path) as f:
-            data = f.readlines()
-
         df = read_keylog_as_df(log_path)
     
         data_dict[p] = df
