@@ -104,6 +104,9 @@ def get_empatica_data(a3,keylogger=False) -> dict:
 
 
 '''
+Read in keylogger data
+set keylogger=False if doing the anaysis for EDA data, else set to True
+This will filter out participants accordingly
 '''
 
 def get_keylog_data(a3, keylogger=False) -> dict:
@@ -127,7 +130,7 @@ def get_keylog_data(a3, keylogger=False) -> dict:
         with open(log_path) as f:
             data = f.readlines()
 
-        df = convert_log_to_df(data)
+        df = read_keylog_as_df(log_path)
     
         data_dict[p] = df
         csv_save_path = os.path.join(path, p, "extra_credit.csv")
@@ -150,19 +153,36 @@ End:
 
 '''
 
-def convert_log_to_df(data):
-    parsed_data = [json.loads(line) for line in data]
-    df = pd.DataFrame(parsed_data)
+def read_keylog_as_df(log_path):
 
-    # drop useless col
-    df.drop(columns=['type'], inplace=True)
+    # read raw log data
+    with open(log_path) as f:
+        log_data = f.readlines()
+    parsed_data = [json.loads(line) for line in log_data]
 
-    # time conversion
+    # handle the case where there are multiple content changes in a single log entry
+    parsed_data_new = []
+    for data in parsed_data:
+        if len(data['contentChanges']) <= 1:
+            data_copy = data.copy()
+            data_copy['order'] = 0
+            parsed_data_new.append(data_copy)
+        else:
+            for i, change in enumerate(data['contentChanges']):
+                data_copy = data.copy()
+                data_copy['contentChanges'] = [change]
+                data_copy['order'] = i
+                parsed_data_new.append(data_copy)
+
+    # convert to dataframe
+    df = pd.DataFrame(parsed_data_new)
+
+    # Time conversion
     df['Time'] = pd.to_datetime(df['t']).dt.tz_localize(None) # remove timezone for operation later
     df.drop(columns=['t'], inplace=True)
     df['T_s'] = (df['Time'] - df['Time'].min()).dt.total_seconds() # time since start
 
-    # parse out content change values
+    # Parse the content changes
     df['start_line'] = df['contentChanges'].apply(lambda x: x[0]['range'][0]['line'])
     df['start_character'] = df['contentChanges'].apply(lambda x: x[0]['range'][0]['character'])
     df['end_line'] = df['contentChanges'].apply(lambda x: x[0]['range'][1]['line'])
@@ -172,54 +192,11 @@ def convert_log_to_df(data):
     df['range_length'] = df['contentChanges'].apply(lambda x: x[0]['rangeLength'])
     df['text'] = df['contentChanges'].apply(lambda x: x[0]['text'])
 
+    # sort
+    df.sort_values(by=['Time', 'order'], ascending=True, inplace=True)
+
+    # drop unnecessary columns
     df.drop(columns=['contentChanges'], inplace=True)
-
-    return df
-
-# TODO: Change this
-
-def convert_log_to_df(data):
-    parsed_data = [json.loads(line) for line in data]
-
-    # Initialize a list to hold all expanded log entries
-    expanded_data = []
-
-    for entry in parsed_data:
-        # Extract common fields
-        common_fields = {
-            't': entry['t'],
-            'file_name': entry['file_name'],
-            # Add any other fields you have in your log entries
-        }
-
-        # Now process each content change in 'contentChanges'
-        for change in entry['contentChanges']:
-            # Combine common fields with change-specific fields
-            expanded_entry = common_fields.copy()
-            expanded_entry.update(change)
-            expanded_data.append(expanded_entry)
-
-    # Now create a DataFrame from the expanded data
-    df = pd.DataFrame(expanded_data)
-
-    # Time conversion
-    df['Time'] = pd.to_datetime(df['t']).dt.tz_localize(None)  # Remove timezone for operations later
-    df['T_s'] = (df['Time'] - df['Time'].min()).dt.total_seconds()  # Time since start
-
-    # Parse out content change values
-    df['start_line'] = df['range'].apply(lambda x: x[0]['line'])
-    df['start_character'] = df['range'].apply(lambda x: x[0]['character'])
-    df['end_line'] = df['range'].apply(lambda x: x[1]['line'])
-    df['end_character'] = df['range'].apply(lambda x: x[1]['character'])
-    df['range_offset'] = df['contentChanges'].apply(lambda x: x[0]['rangeOffset'])
-
-    # Drop unnecessary columns
-    df.drop(columns=['t', 'range'], inplace=True)
-    print(df.columns)
-
-    # Reorder columns if necessary
-    df = df[['file_name', 'Time', 'T_s', 'start_line', 'start_character', 'end_line', 'end_character',
-             'range_offset', 'rangeLength', 'text']]
 
     return df
 

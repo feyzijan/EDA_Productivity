@@ -10,6 +10,11 @@ import concurrent.futures
 import subprocess
 import re
 import py_compile
+import string
+
+
+# Snapshot interval
+n_snapshot_interval_minutes = 5
 
 
 # Directories to store snapshots
@@ -30,9 +35,6 @@ a3_file_1_original_path = f"archive/IncompleteAssignments/{a3_file_1}"
 a3_file_2_original_path = f"archive/IncompleteAssignments/{a3_file_2}"
 a4_file_1_original_path = f"archive/IncompleteAssignments/{a4_file_1}"
 a4_file_2_original_path = f"archive/IncompleteAssignments/{a4_file_2}"
-
-# Snapshot interval
-n_snapshot_interval_minutes = 5
 
 
 # Commands to run the autograders for each question
@@ -74,7 +76,6 @@ def format_keylog_data(df):
     df["T_s"] = df["T_s"] - df["T_s"].min()
     df['Time'] = pd.to_datetime(df['Time'])
     df = df.sort_values('Time').reset_index(drop=True)
-    # df = df.drop(columns=['Time_s'])
     return df
 
 
@@ -88,7 +89,7 @@ def print_time_info(p,df,n):
     max_diff_idx = temp_df['T_s'].diff().idxmax()
     max_diff_time = temp_df['T_s'][max_diff_idx]
     max_diff_time_prev = temp_df['T_s'][max_diff_idx - 1]
-    print(f"{p}, total run time {round(total_time,1)}, Max time difference  between keystrokes: {round(max_diff/60,1)}m, at index: {max_diff_idx},  starting: {round(max_diff_time_prev)}, ending:{round(max_diff_time)}")
+    print(f"\n{p}, total run time {round(total_time,1)} mins, Max time difference  between keystrokes: {round(max_diff/60,1)}m, at index: {max_diff_idx},  starting: {round(max_diff_time_prev)}, ending:{round(max_diff_time)}")
 
 
 '''
@@ -131,20 +132,47 @@ def apply_change(file_content, row):
         print("Invalid change event:", row)
     return file_content
 
-def apply_change_2(file_content, row):
+
+def read_file_as_string(file_path):
+    with open(file_path, 'r', encoding='utf-8') as f:
+        content = f.read()
+    # # Create a set of printable characters, including standard whitespace
+    # printable_chars = set(string.printable) | {'\n', '\t'}
+    # # Filter out non-printable characters
+    # content = ''.join(filter(lambda x: x in printable_chars, content))
+    return content
+
+def read_file_as_lines(file_path):
     """
-    Applies a change to the file_content string based on line and character positions.
+    Reads a file and returns its content as a list of lines, preserving line endings.
 
     Parameters:
-    - file_content: String representing the entire file content.
-    - row: A dictionary representing a content change event.
+    - file_path: Path to the file.
 
     Returns:
-    - Updated file content string.
+    - List of strings, each representing a line in the file, including line endings.
     """
-    # Split the file content into lines, keeping line endings
-    lines = file_content.splitlines(keepends=True)  # Keep line endings to preserve the original content
+    with open(file_path, 'r', encoding='utf-8') as f:
+        # Read the entire content
+        content = f.read()
+    # Normalize line endings to '\n' to ensure consistency
+    content = content.replace('\r\n', '\n').replace('\r', '\n')
+    # Split into lines, keeping the line endings
+    lines = content.splitlines(keepends=True)
+    return lines
 
+def apply_change_by_lines(lines, row):
+    """
+    Applies a change to the lines list based on a single content change event.
+
+    Parameters:
+    - lines: List of strings representing the file content, one line per element.
+    - row: A dictionary or Series representing a content change event, with fields:
+        - 'start_line', 'start_character', 'end_line', 'end_character', 'text'
+
+    Returns:
+    - Updated list of lines.
+    """
     # Extract change details
     start_line = int(row['start_line'])
     start_character = int(row['start_character'])
@@ -152,33 +180,50 @@ def apply_change_2(file_content, row):
     end_character = int(row['end_character'])
     new_text = row['text']
 
-    # Normalize newlines in new_text
-    new_text = new_text.replace('\r\n', '\n').replace('\r', '\n')
+    # Adjust for zero-based indexing if the data uses one-based indexing
+    # start_line -= 1
+    # end_line -= 1
 
     # Ensure indices are within bounds
-    if start_line >= len(lines):
-        print(f"Start line {start_line} is beyond the end of the file.")
-        return file_content
-    if end_line >= len(lines):
-        print(f"End line {end_line} is beyond the end of the file.")
-        return file_content
+    if start_line < 0 or start_line >= len(lines):
+        print(f"start_line {start_line} is out of bounds")
+        # return lines
+        raise ValueError(f"start_line {start_line} is out of bounds")
+    if end_line < 0 or end_line >= len(lines):
+        print(f"end_line {end_line} is out of bounds")
+        # return lines
+        raise ValueError(f"end_line {end_line} is out of bounds")
 
-    # Extract the text before the change
-    before_change = ''.join(lines[:start_line]) + lines[start_line][:start_character]
+    # Extract the text before and after the change
+    before_change = lines[start_line][:start_character]
+    after_change = lines[end_line][end_character:]
 
-    # Extract the text after the change
-    after_change = lines[end_line][end_character:] + ''.join(lines[end_line+1:])
+    # Build the new content to replace the specified range
+    # Split the new_text into lines
+    new_text_lines = new_text.splitlines(keepends=True)
 
-    # Combine to form the new file content
-    file_content = before_change + new_text + after_change
+    # Handle the replacement
+    if len(new_text_lines) == 0:
+        # Deletion without replacement
+        new_lines = []
+    else:
+        # Merge the before_change with the first line of new_text
+        new_text_lines[0] = before_change + new_text_lines[0]
 
-    return file_content
+        # Merge the after_change with the last line of new_text
+        if not new_text.endswith('\n'):
+            new_text_lines[-1] = new_text_lines[-1] + after_change
+        else:
+            # If new_text ends with a newline, we need to include after_change in a new line
+            new_text_lines.append(after_change)
+            after_change = ''
 
+        new_lines = new_text_lines
 
-def read_file_as_string(file_path):
-    with open(file_path, 'r') as f:
-        return f.read()
+    # Replace the old lines with the new lines
+    lines[start_line:end_line + 1] = new_lines
 
+    return lines
 
 '''
 Create snapshots every n minutes of the active code files for each student in the dataset
