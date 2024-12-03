@@ -132,6 +132,12 @@ def read_file_as_lines(file_path):
     return lines
 
 
+def read_file_as_string(file_path):
+    with open(file_path, 'r', encoding='utf-8') as f:
+        content = f.read()
+    return content
+
+
 def apply_change_by_lines(lines, row):
     """
     Applies a change to the lines list based on a single content change event.
